@@ -1,0 +1,1298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Builder</title>
+    <style>
+        /* --- Basic Setup --- */
+        :root {
+            --color-correct: #28a745;
+            --color-wrong: #dc3545;
+            --color-bg: #f4f7f6;
+            --color-card: #ffffff;
+            --color-text: #333;
+            --color-primary: #007bff;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                Helvetica, Arial, sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text);
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* --- Screen Management --- */
+        .screen {
+            display: none; /* Hide all screens by default */
+        }
+
+        .screen.active {
+            display: block; /* Show only the active screen */
+        }
+
+        /* --- Card Styling --- */
+        .card {
+            background-color: var(--color-card);
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 1.5rem 2rem;
+        }
+
+        /* --- Mobile-Friendly Tweak --- */
+        @media (max-width: 400px) {
+            .card {
+                padding: 1.5rem 1rem; /* Reduces horizontal padding on small screens */
+            }
+        }
+
+        h1, h2 {
+            text-align: center;
+            margin-top: 0;
+        }
+
+        /* --- Setup Screen --- */
+        #setup-screen textarea {
+            width: 100%;
+            height: 250px;
+            box-sizing: border-box; /* Important for 100% width */
+            border: 1px solid #ccc;
+            border-radius: var(--border-radius);
+            padding: 0.75rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+        }
+
+        #setup-screen p {
+            font-size: 0.9rem;
+            color: #555;
+            text-align: center;
+        }
+
+        #setup-actions {
+            margin-top: 1rem;
+        }
+        
+        #parse-error-message {
+            color: var(--color-wrong);
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 0.5rem;
+            display: none; /* Hidden by default */
+        }
+
+        /* --- Quiz Screen --- */
+        #progress-text {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #777;
+            margin-bottom: 0.5rem;
+        }
+
+        #question-text {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            min-height: 50px; /* Prevent layout shift */
+        }
+
+        #options-container {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        /* --- Progress Bar --- */
+        #progress-bar-container {
+            width: 100%;
+            background-color: #e9ecef;
+            border-radius: var(--border-radius);
+            height: 10px;
+            margin-top: 1.5rem;
+            overflow: hidden;
+        }
+
+        #progress-bar-fill {
+            width: 0%;
+            height: 100%;
+            background-color: var(--color-primary);
+            border-radius: var(--border-radius);
+            transition: width 0.5s ease-out;
+        }
+
+        /* --- Feedback Message --- */
+        #feedback-message {
+            font-size: 1.2rem;
+            font-weight: 700;
+            text-align: center;
+            padding: 1rem 0;
+            min-height: 1.2rem; /* Reserve space */
+        }
+        #feedback-message.correct {
+            color: var(--color-correct);
+        }
+        #feedback-message.incorrect {
+            color: var(--color-wrong);
+        }
+
+        /* --- Results Screen --- */
+        #score-text {
+            font-size: 2rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        #results-options {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        /* --- Button Styling --- */
+        .btn {
+            display: block;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            padding: 0.9rem 1rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: background-color 0.2s, box-shadow 0.2s;
+            text-align: center; /* Centered text for single button */
+        }
+
+        .btn:hover {
+            background-color: #0056b3;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Option button specific styles */
+        .option-btn {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            color: var(--color-text);
+            text-align: left;
+        }
+
+        .option-btn:hover:not(:disabled) {
+            background-color: #e9ecef;
+            border-color: #bbb;
+        }
+
+        .option-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        /* Feedback styles for option buttons */
+        .option-btn.correct-answer {
+            background-color: var(--color-correct);
+            border-color: var(--color-correct);
+            color: white;
+            font-weight: 700;
+        }
+
+        .option-btn.wrong-answer {
+            background-color: var(--color-wrong);
+            border-color: var(--color-wrong);
+            color: white;
+            font-weight: 700;
+        }
+
+        /* Secondary button style */
+        .btn-secondary {
+            background-color: #6c757d;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        /* --- Helper Panel --- */
+        #helper-panel {
+            margin-top: 0.75rem;
+            padding: 0.9rem;
+            background-color: #f8fbfa;
+            border: 1px solid #e6efee;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            color: #2f3b36;
+            max-height: 200px;
+            overflow: auto;
+        }
+        #helper-panel h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1rem;
+        }
+        #helper-panel ul {
+            margin: 0 0 0.5rem 1rem;
+            padding: 0;
+        }
+        /* --- Code block toggle and code styles --- */
+        .toggle-code-btn {
+            display: inline-block;
+            margin-bottom: 0.5rem;
+            background: transparent;
+            border: 1px solid #e1e6e5;
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .code-container {
+            display: none;
+            margin-top: 0.5rem;
+            border-radius: 6px;
+            overflow: auto;
+            border: 1px solid #e6efee;
+            background: #f8f9fa;
+            padding: 0.6rem;
+        }
+        pre.hljs {
+            margin: 0;
+            background: transparent;
+        }
+
+        /* Timer display */
+        #timer-display {
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-align: center;
+            color: #333;
+        }
+        /* Code readability improvements */
+        pre { tab-size: 4; }
+        code { display: block; }
+        /* Optional: keep long lines sensible while preserving pre formatting */
+        pre { white-space: pre-wrap; word-break: break-word; }
+        .helper-section { margin-top: 0.5rem; }
+        .helper-sub { font-weight: 600; margin-bottom: 0.25rem; }
+        .helper-mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+            background: #ffffff;
+            padding: 0.5rem;
+            border-radius: 6px;
+            border: 1px solid #e9f0ef;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+    </style>
+    <!-- MathJax config: ignore textarea and allow common delimiters -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            }
+        };
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+    <!-- Highlight.js (lightweight CDN) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- ===== 1. SETUP SCREEN ===== -->
+        <div id="setup-screen" class="screen active card">
+            <h1>Quiz Builder</h1>
+            <p>Paste your quiz data below:</p>
+            <textarea
+                id="quiz-paste-input"
+                placeholder="1. What is 2+2? a) 3 b) 4 c) 5 d) 6 [ans: b]
+2. Which planet is closest? a) Venus b) Earth c) Mercury d) Mars [ans: c]"
+            ></textarea>
+            <!-- Helper Panel -->
+            <div id="helper-panel">
+                    <h3>How to format your quiz (MCQ & mixed question types supported)</h3>
+                    <div class="helper-section">
+                        <div class="helper-sub">Supported question types:</div>
+                        <pre class="helper-mono">[mcq]   Multiple-choice
+    [short] Short free-text answer
+    [calc]  Calculation (numeric or symbolic)
+    [code]  Code-reading question (single-line code block via ```...```)</pre>
+                    </div>
+                    <div class="helper-section">
+                        <div class="helper-sub">Canonical single-line examples:</div>
+                        <pre class="helper-mono">1. [mcq] What is 2+2? a) 3 b) 4 c) 5 d) 6 [ans: b]
+    2. [short] Define overfitting. [ans: fitting noise in training data]
+    3. [calc] Compute $3^2 + 1$. [ans: 10]</pre>
+                    </div>
+                    <div class="helper-section">
+                        <div class="helper-sub">Important notes:</div>
+                        <pre class="helper-mono">- One question per line
+    - Question type tag is mandatory: [mcq], [short], or [calc]
+    - [ans: ...] is mandatory and must appear on the same line
+    - LaTeX must use single backslashes (e.g. \in, \mathbb{R})
+    - Line breaks separate questions only</pre>
+                    </div>
+                    <div class="helper-section">
+                        <div class="helper-sub">Short & calculation questions</div>
+                        <pre class="helper-mono">Short & calculation questions are self-graded.
+- After submitting your answer the correct answer will be shown
+- You decide if your answer is correct and click Yes or No
+- The system updates your score and advances to the next question</pre>
+                    </div>
+            </div>
+            <div id="setup-actions">
+                <button id="start-quiz-btn" class="btn">Start Quiz</button>
+            </div>
+            <div id="parse-error-message"></div>
+        </div>
+
+        <!-- ===== 2. QUIZ SCREEN ===== -->
+        <div id="quiz-screen" class="screen card">
+            <div id="progress-text">Question 1 of 10</div>
+                <div id="timer-display">Time Remaining: 00:00</div>
+            <h2 id="question-text">Loading question...</h2>
+            <div id="options-container">
+                <!-- Option buttons will be dynamically inserted here -->
+            </div>
+            <div id="feedback-message"></div>
+            <!-- Progress Bar -->
+            <div id="progress-bar-container">
+                <div id="progress-bar-fill"></div>
+            </div>
+        </div>
+
+        <!-- ===== 3. RESULTS SCREEN ===== -->
+        <div id="results-screen" class="screen card">
+            <h2>Quiz Complete!</h2>
+            <div id="score-text">Your Score: 0 / 0</div>
+            <div id="results-options">
+                <button id="redo-btn" class="btn">Redo Quiz</button>
+                <button id="review-wrong-btn" class="btn btn-secondary">
+                    Review Wrong Questions
+                </button>
+                <button id="new-quiz-btn" class="btn btn-secondary">
+                    Start New Quiz
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State ---
+        let allQuestions = []; // "Master" list of questions from the last successful parse
+        let wrongQuestions = [];
+        let activeQuizQuestions = []; // Holds the questions for the current quiz round
+        let currentQuestionIndex = 0;
+        let score = 0;
+
+        // --- DOM Element References ---
+        const screens = {
+            setup: document.getElementById("setup-screen"),
+            quiz: document.getElementById("quiz-screen"),
+            results: document.getElementById("results-screen"),
+        };
+
+        // Setup Screen
+        const quizPasteInput = document.getElementById("quiz-paste-input");
+        const startQuizBtn = document.getElementById("start-quiz-btn");
+        const parseErrorMessage = document.getElementById("parse-error-message");
+
+        // Quiz Screen
+        const progressText = document.getElementById("progress-text");
+        const questionText = document.getElementById("question-text");
+        const optionsContainer = document.getElementById("options-container");
+        const feedbackMessage = document.getElementById("feedback-message");
+        const progressBarFill = document.getElementById("progress-bar-fill");
+
+        // Results Screen
+        const scoreText = document.getElementById("score-text");
+        const redoBtn = document.getElementById("redo-btn");
+        const reviewWrongBtn = document.getElementById("review-wrong-btn");
+        const newQuizBtn = document.getElementById("new-quiz-btn");
+
+
+        // --- Event Listeners ---
+        startQuizBtn.addEventListener("click", parseAndStartQuiz);
+        optionsContainer.addEventListener("click", checkAnswer);
+        // delegated handler for short/calc submit
+        optionsContainer.addEventListener("click", handleSubmitClick);
+        redoBtn.addEventListener("click", redoQuiz);
+        reviewWrongBtn.addEventListener("click", reviewWrong);
+        newQuizBtn.addEventListener("click", startNewQuiz);
+        
+        // NEW: Keyboard listener for options 1, 2, 3, 4
+        document.addEventListener("keydown", handleKeyPress);
+
+        
+        // --- Core Functions ---
+
+        /**
+         * Escape HTML special chars to prevent injection (only used outside math blocks)
+        /**
+         * Delegated click handler for actions (submit / manual mark)
+         */
+        function handleSubmitClick(event) {
+            const actionBtn = event.target.closest('[data-action]');
+            if (!actionBtn) return;
+            const action = actionBtn.dataset.action;
+            if (action === 'submit-text') {
+                submitTextAnswer();
+            } else if (action === 'mark-correct' || action === 'mark-incorrect') {
+                handleManualMark(actionBtn);
+            }
+        }
+
+        /**
+         * Process the user's manual grading decision (Yes/No)
+         */
+        function handleManualMark(button) {
+            // Prevent double clicks
+            button.disabled = true;
+            const siblingButtons = optionsContainer.querySelectorAll('[data-action^="mark-"]');
+            siblingButtons.forEach((b) => (b.disabled = true));
+
+            const action = button.dataset.action;
+            const q = activeQuizQuestions[currentQuestionIndex];
+
+            if (!q) return;
+
+            if (action === 'mark-correct') {
+                q.isCorrect = true;
+                score++;
+                feedbackMessage.textContent = 'Marked correct';
+                feedbackMessage.className = 'correct';
+            } else {
+                q.isCorrect = false;
+                wrongQuestions.push(q);
+                feedbackMessage.textContent = 'Marked incorrect';
+                feedbackMessage.className = 'incorrect';
+            }
+
+            // Update progress bar
+            const progressPercent = ((currentQuestionIndex + 1) / activeQuizQuestions.length) * 100;
+            progressBarFill.style.width = `${progressPercent}%`;
+
+            // Advance after a short delay
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < activeQuizQuestions.length) {
+                    displayQuestion();
+                } else {
+                    showResults();
+                }
+            }, 1200);
+        }
+
+        /**
+         * Render text while preserving math delimiters. Non-math segments are HTML-escaped.
+         * Supports: $$...$$, $...$, \(...\), \[...\]
+         */
+        /**
+         * Escape HTML special chars to prevent injection (used by renderTextWithMathToHTML)
+         */
+        function escapeHTML(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        /**
+         * Lightweight code formatter for single-line code blocks.
+         * Inserts structural line breaks and indents by brace depth.
+         */
+        function autoFormatCode(code) {
+            let indentLevel = 0;
+            const indentSize = 4;
+            const lines = [];
+
+            if (!code) return '';
+
+            // Ensure escaped newlines are real newlines first
+            code = String(code).replace(/\\n/g, '\n');
+
+            // Add structural line breaks for common tokens
+            code = code.replace(/\{/g, '{\n')
+                       .replace(/\}/g, '\n}\n')
+                       .replace(/;/g, ';\n')
+                       .replace(/\)\s*\{/g, ') {\n');
+
+            const rawLines = code.split('\n');
+
+            for (let line of rawLines) {
+                line = line.trim();
+                if (!line) continue;
+
+                // Decrease indent if line starts with closing brace
+                if (line.startsWith('}')) {
+                    indentLevel = Math.max(indentLevel - 1, 0);
+                }
+
+                const indent = ' '.repeat(indentLevel * indentSize);
+                lines.push(indent + line);
+
+                // Increase indent if line ends with opening brace
+                if (line.endsWith('{')) {
+                    indentLevel++;
+                }
+            }
+
+            return lines.join('\n');
+        }
+
+        // Normalize user and correct answers for comparison
+        function normalizeAnswer(str) {
+            if (str === null || str === undefined) return '';
+            return String(str).toLowerCase().replace(/\s+/g, ' ').trim();
+        }
+
+        // Evaluate answer with simple numeric fallback for calc-like answers
+        function evaluateAnswer(correct, user) {
+            const c = String(correct).trim();
+            const u = String(user).trim();
+
+            // Try numeric comparison first
+            const cNum = Number(c);
+            const uNum = Number(u);
+            if (!isNaN(cNum) && !isNaN(uNum)) {
+                // consider small floating point tolerance
+                return Math.abs(cNum - uNum) < 1e-9;
+            }
+
+            // Fallback to normalized string compare
+            return normalizeAnswer(c) === normalizeAnswer(u);
+        }
+        function renderTextWithMathToHTML(text) {
+            if (!text) return '';
+            const mathRegex = /(\$\$[\s\S]*?\$\$|\$[^\$][\s\S]*?\$|\\\\\[[\s\S]*?\\\\\]|\\\\\([\s\S]*?\\\\\))/g;
+            let lastIndex = 0;
+            let result = '';
+            let match;
+            while ((match = mathRegex.exec(text)) !== null) {
+                const idx = match.index;
+                const before = text.slice(lastIndex, idx);
+                result += escapeHTML(before);
+                // Append math portion verbatim (MathJax will typeset it). Trim to avoid accidental leading/trailing spaces loss.
+                result += match[0];
+                lastIndex = idx + match[0].length;
+            }
+            // Append remaining
+            if (lastIndex < text.length) {
+                result += escapeHTML(text.slice(lastIndex));
+            }
+            return result;
+        }
+
+        /**
+         * Safe wrapper to typeset only when MathJax is loaded
+         */
+        function safeTypeset(nodes) {
+            if (window.MathJax && MathJax.typesetPromise) {
+                try {
+                    MathJax.typesetPromise(Array.isArray(nodes) ? nodes : [nodes]).catch((e) => console.error('MathJax typeset error:', e));
+                } catch (e) {
+                    console.error('MathJax invocation error:', e);
+                }
+            }
+        }
+
+        /**
+         * NEW: Handles keyboard shortcuts for quiz options
+         */
+        function handleKeyPress(event) {
+            // Only run if the quiz screen is active
+            if (!screens.quiz.classList.contains("active")) {
+                return;
+            }
+
+            // Only allow shortcut when current question is MCQ
+            const q = activeQuizQuestions[currentQuestionIndex];
+            if (!q || q.type !== 'mcq') return;
+
+            // Map keys to option letters
+            const keyMap = {
+                "1": "a",
+                "2": "b",
+                "3": "c",
+                "4": "d",
+            };
+
+            const optionLetter = keyMap[event.key];
+
+            if (optionLetter) {
+                // Find the corresponding button on the screen
+                const targetButton = optionsContainer.querySelector(
+                    `[data-option="${optionLetter}"]`
+                );
+
+                // If the button exists and is not already disabled, click it
+                if (targetButton && !targetButton.disabled) {
+                    event.preventDefault(); // Stop the '1' from doing anything else
+                    targetButton.click();
+                }
+            }
+        }
+
+        /**
+         * Utility function to shuffle an array
+         */
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        /**
+         * Switches the visible screen
+         */
+        function showScreen(screenName) {
+            for (let key in screens) {
+                screens[key].classList.remove("active");
+            }
+            screens[screenName].classList.add("active");
+        }
+
+        /**
+         * Clears any visual parsing errors
+         */
+        function clearParseError() {
+            parseErrorMessage.textContent = "";
+            parseErrorMessage.style.display = "none";
+            quizPasteInput.style.borderColor = "#ccc";
+        }
+        
+        /**
+         * Shows a visual parsing error
+         */
+        function showParseError(message) {
+            parseErrorMessage.textContent = message;
+            parseErrorMessage.style.display = "block";
+            quizPasteInput.style.borderColor = "red";
+        }
+
+        /**
+         * Parses the text from the textarea and starts the quiz
+         */
+        function parseAndStartQuiz() {
+            clearParseError();
+            const text = quizPasteInput.value;
+            if (!text) {
+                showParseError("Please paste your quiz data first.");
+                return;
+            }
+
+            try {
+                // Parse the text
+                const parsedQuestions = parseQuizText(text);
+
+                if (parsedQuestions.length === 0) {
+                    showParseError("No valid questions found. Please check the format.");
+                    return;
+                }
+                
+                // Set this as the "master" list for this session
+                allQuestions = parsedQuestions;
+
+                // Reset state and start
+                startQuiz(allQuestions);
+            } catch (error) {
+                console.error("Error parsing quiz:", error);
+                showParseError(error.message); // Show the specific error
+            }
+        }
+
+
+        /**
+         * The core parsing logic (Flexible Version)
+         * Format: 1. Question? a) Opt 1 [ans: b] b) Opt 2 c) Opt 3 d) Opt 4
+         */
+        function parseQuizText(text) {
+            // *** FIX: Use regex to split on ANY newline character ***
+            const lines = text.trim().split(/\r?\n|\r/);
+            const questions = [];
+                const ansTagRegex = /\[ans:\s*([^\]]+)\]/i;
+                const typeTagRegex = /\[(mcq|short|calc|code)\]/i;
+                const codeBlockRegex = /```(\w+)?\s*([\s\S]*?)```/;
+            const mcqOptionsRegex = /^(?:\d+\.\s*)?(.*?)\s+a\)\s(.*?)\s+b\)\s(.*?)\s+c\)\s(.*?)\s+d\)\s(.*)$/i;
+
+
+            for (const line of lines) {
+                let trimmedLine = line.trim();
+                if (trimmedLine.length === 0) continue;
+                // 1. Ensure type tag exists
+                const typeMatch = trimmedLine.match(typeTagRegex);
+                if (!typeMatch) {
+                    throw new Error('Error: Missing or invalid question type. Use [mcq], [short], or [calc].');
+                }
+                const qtype = typeMatch[1].toLowerCase();
+
+                // 2. Find and extract the answer tag
+                const ansMatch = trimmedLine.match(ansTagRegex);
+                if (!ansMatch) {
+                    throw new Error(`No [ans: ...] tag found in line: "${trimmedLine}"`);
+                }
+                const rawAnswer = ansMatch[1].trim();
+
+                // 3. Remove the type and answer tags to leave the main content
+                trimmedLine = trimmedLine.replace(typeTagRegex, "").replace(ansTagRegex, "").trim();
+
+                // 4. Remove leading number and dot if present
+                trimmedLine = trimmedLine.replace(/^(?:\d+\.\s*)/, "").trim();
+
+                // Build question object depending on type
+                // --- CODE question parsing ---
+                if (qtype === 'code') {
+                    // Extract code block from the trimmed line
+                    const codeMatch = trimmedLine.match(codeBlockRegex);
+                    if (!codeMatch) {
+                        throw new Error(`Code question must include a triple-backtick code block in line: "${line.trim()}"`);
+                    }
+                    const language = codeMatch[1] ? codeMatch[1].toLowerCase() : null;
+                    // Preserve real newlines: convert escaped "\\n" into actual line breaks
+                    let codeText = codeMatch[2].trim();
+                    codeText = codeText.replace(/\\n/g, '\n');
+
+                    // Remove the code block from the question text
+                    const qtext = trimmedLine.replace(codeBlockRegex, '').trim();
+
+                    questions.push({
+                        type: 'code',
+                        code: codeText,
+                        language: language,
+                        question: qtext,
+                        answer: rawAnswer,
+                        userAnswer: null,
+                        isCorrect: null,
+                    });
+                } else if (qtype === 'mcq') {
+                    const m = trimmedLine.match(mcqOptionsRegex);
+                    if (!m) {
+                        throw new Error(`Invalid MCQ format (expect a)-d) inline) in: "${line.trim()}"`);
+                    }
+                    const qtext = m[1].trim();
+                    const a = m[2].trim();
+                    const b = m[3].trim();
+                    const c = m[4].trim();
+                    const d = m[5].trim();
+
+                    const ansLetter = rawAnswer.toLowerCase();
+                    if (!/^[a-d]$/.test(ansLetter)) {
+                        throw new Error(`MCQ answer must be one of a,b,c,d in line: "${line.trim()}"`);
+                    }
+
+                    questions.push({
+                        type: 'mcq',
+                        question: qtext,
+                        options: { a, b, c, d },
+                        answer: ansLetter,
+                        userAnswer: null,
+                        isCorrect: null,
+                    });
+                } else if (qtype === 'short' || qtype === 'calc') {
+                    const qtext = trimmedLine.trim();
+                    if (!qtext) {
+                        throw new Error(`Empty question text for ${qtype} in line: "${line.trim()}"`);
+                    }
+                    questions.push({
+                        type: qtype,
+                        question: qtext,
+                        options: null,
+                        answer: rawAnswer,
+                        userAnswer: null,
+                        isCorrect: null,
+                    });
+                } else {
+                    throw new Error(`Unknown question type: ${qtype}`);
+                }
+            }
+            return questions;
+        }
+
+        /**
+         * Resets state variables and begins the quiz
+         */
+        function startQuiz(questionList) {
+            // Use a *copy* of the provided list for the active quiz
+            // This is crucial so our "master" allQuestions list isn't modified
+            activeQuizQuestions = [...questionList]; 
+            
+            currentQuestionIndex = 0;
+            score = 0;
+            wrongQuestions = [];
+            progressBarFill.style.width = "0%"; // Reset progress bar
+
+            // Ensure UI is interactive then show quiz
+            enableAllInteractivity();
+            showScreen("quiz");
+            // Start timer for this quiz
+            startTimer();
+            displayQuestion();
+        }
+
+        /**
+         * Displays the current question and options
+         */
+        function displayQuestion() {
+            try {
+                // Clear previous state
+                feedbackMessage.textContent = "";
+                feedbackMessage.className = "";
+                optionsContainer.innerHTML = "";
+
+                // Get current question from the *active* list
+                const q = activeQuizQuestions[currentQuestionIndex];
+
+                // If there is no question (out-of-range or empty list), show a helpful message
+                if (!q) {
+                    progressText.textContent = `Question 0 of ${activeQuizQuestions.length}`;
+                    questionText.textContent = 'No question available. Return to Setup and load a quiz.';
+                    feedbackMessage.textContent = '';
+                    // Offer a visible button to go back to setup
+                    optionsContainer.innerHTML = '';
+                    const backBtn = document.createElement('button');
+                    backBtn.className = 'btn btn-secondary';
+                    backBtn.textContent = 'Back to Setup';
+                    backBtn.addEventListener('click', () => showScreen('setup'));
+                    optionsContainer.appendChild(backBtn);
+                    return;
+                }
+
+                // Update UI
+                progressText.textContent = `Question ${
+                    currentQuestionIndex + 1
+                } of ${activeQuizQuestions.length}`;
+                questionText.innerHTML = renderTextWithMathToHTML(q.question);
+
+                if (q.type === 'mcq') {
+                    for (const key in q.options) {
+                        if (q.options[key]) {
+                            const button = document.createElement("button");
+                            button.className = "btn option-btn";
+                            button.dataset.option = key;
+                            button.innerHTML = `<strong>${key})</strong> ${renderTextWithMathToHTML(q.options[key])}`;
+                            optionsContainer.appendChild(button);
+                        }
+                    }
+                } else if (q.type === 'short' || q.type === 'calc') {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'quiz-text-input';
+                    input.placeholder = 'Type your answer and press Enter';
+                    input.style.padding = '0.8rem';
+                    input.style.border = '1px solid #ccc';
+                    input.style.borderRadius = '6px';
+                    input.style.width = '100%';
+
+                    const submit = document.createElement('button');
+                    submit.className = 'btn';
+                    submit.style.marginTop = '0.5rem';
+                    submit.dataset.action = 'submit-text';
+                    submit.textContent = 'Submit';
+
+                    optionsContainer.appendChild(input);
+                    optionsContainer.appendChild(submit);
+
+                    // Allow Enter to submit the text answer
+                    input.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            submitTextAnswer();
+                        }
+                    });
+                }
+
+                // NEW: Render code question using richer pre/code markup
+                else if (q.type === 'code') {
+                    const languageClass = q.language ? `language-${q.language}` : '';
+
+                    questionText.innerHTML = `
+                        <button class="toggle-code-btn">Hide Code</button>
+                        <div class="code-container">
+                            <pre style="
+                                background:#f6f8fa;
+                                padding:1rem 1.25rem;
+                                border-radius:8px;
+                                overflow:auto;
+                                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+                                font-size: 0.95rem;
+                                line-height: 1.5;
+                                white-space: pre;
+                                text-align: left;
+                                letter-spacing: 0.2px;
+                            ">
+</code>
+<code class="${languageClass}">
+${escapeHTML(autoFormatCode(q.code))}
+</code>
+</code>
+                            </pre>
+                        </div>
+                        <div style="margin-top:1rem;">
+                            ${renderTextWithMathToHTML(q.question)}
+                        </div>
+                    `;
+
+                    // Render a text input + submit for user answer (no immediate reveal)
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'quiz-text-input';
+                    input.placeholder = 'Type your answer and press Enter';
+                    input.style.padding = '0.8rem';
+                    input.style.border = '1px solid #ccc';
+                    input.style.borderRadius = '6px';
+                    input.style.width = '100%';
+
+                    const submit = document.createElement('button');
+                    submit.className = 'btn';
+                    submit.style.marginTop = '0.5rem';
+                    submit.dataset.action = 'submit-text';
+                    submit.textContent = 'Submit';
+
+                    optionsContainer.appendChild(input);
+                    optionsContainer.appendChild(submit);
+
+                    // Allow Enter to submit the text answer
+                    input.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            submitTextAnswer();
+                        }
+                    });
+
+                    // Syntax highlight the code block if hljs is present
+                    if (window.hljs && typeof hljs.highlightElement === 'function') {
+                        try {
+                            const codeBlock = questionText.querySelector('pre code');
+                            if (codeBlock) hljs.highlightElement(codeBlock);
+                        } catch (e) {
+                            console.error('Highlight error:', e);
+                        }
+                    }
+
+                    // Toggle collapse behavior scoped to this questionText
+                    const toggleBtn = questionText.querySelector('.toggle-code-btn');
+                    const container = questionText.querySelector('.code-container');
+                    if (toggleBtn && container) {
+                        // Start visible per provided design; allow toggle
+                        container.style.display = 'block';
+                        toggleBtn.addEventListener('click', () => {
+                            const visible = container.style.display !== 'none';
+                            container.style.display = visible ? 'none' : 'block';
+                            toggleBtn.textContent = visible ? 'Show Code' : 'Hide Code';
+                        });
+                    }
+                }
+
+                // Typeset the question and options for math
+                safeTypeset([questionText, optionsContainer]);
+            } catch (err) {
+                console.error('Error in displayQuestion:', err);
+                questionText.textContent = 'Error loading question. Check the console for details.';
+                optionsContainer.innerHTML = '';
+                const backBtn = document.createElement('button');
+                backBtn.className = 'btn btn-secondary';
+                backBtn.textContent = 'Back to Setup';
+                backBtn.addEventListener('click', () => showScreen('setup'));
+                optionsContainer.appendChild(backBtn);
+            }
+        }
+
+        
+
+        /**
+         * Handles text submissions for short and calc question types
+         */
+        function submitTextAnswer() {
+            const input = optionsContainer.querySelector('.quiz-text-input');
+            if (!input) return;
+            const userAnswer = input.value.trim();
+
+            if (userAnswer.length === 0) {
+                feedbackMessage.textContent = 'Please enter an answer before submitting.';
+                feedbackMessage.className = 'incorrect';
+                return;
+            }
+
+            input.disabled = true;
+            const submitBtn = optionsContainer.querySelector('[data-action="submit-text"]');
+            if (submitBtn) submitBtn.disabled = true;
+
+            const q = activeQuizQuestions[currentQuestionIndex];
+            if (!q) return;
+
+            // If this is a code question, use manual self-grading like short/calc SAQs
+            if (q.type === 'code') {
+                // Record user's answer but do NOT auto-grade
+                q.userAnswer = userAnswer;
+
+                // Reveal the model answer and present Yes/No self-grading buttons
+                const revealDiv = document.createElement('div');
+                revealDiv.style.marginTop = '0.75rem';
+                revealDiv.innerHTML = `
+                    <div><strong>Correct answer:</strong></div>
+                    <div class="model-answer" style="margin:0.25rem 0;padding:0.5rem;background:#f8f9fa;border-radius:6px;border:1px solid #eee">${renderTextWithMathToHTML(q.answer)}</div>
+                    <div style="margin-top:0.5rem"><strong>Is your answer correct?</strong></div>
+                `;
+
+                const yesBtn = document.createElement('button');
+                yesBtn.className = 'btn';
+                yesBtn.style.marginTop = '0.5rem';
+                yesBtn.textContent = 'Yes, correct';
+                yesBtn.dataset.action = 'mark-correct';
+
+                const noBtn = document.createElement('button');
+                noBtn.className = 'btn btn-secondary';
+                noBtn.style.marginTop = '0.5rem';
+                noBtn.style.marginLeft = '0.5rem';
+                noBtn.textContent = 'No, incorrect';
+                noBtn.dataset.action = 'mark-incorrect';
+
+                optionsContainer.appendChild(revealDiv);
+                const btnRow = document.createElement('div');
+                btnRow.style.display = 'flex';
+                btnRow.style.gap = '0.5rem';
+                btnRow.appendChild(yesBtn);
+                btnRow.appendChild(noBtn);
+                optionsContainer.appendChild(btnRow);
+
+                // Typeset any LaTeX in the revealed answer
+                safeTypeset([revealDiv, optionsContainer]);
+                return; // wait for manual mark to advance
+            }
+
+            // Otherwise (short/calc) auto-grade as before
+            q.userAnswer = userAnswer;
+            const correct = evaluateAnswer(q.answer, q.userAnswer);
+            q.isCorrect = !!correct;
+            if (q.isCorrect) {
+                score++;
+                feedbackMessage.textContent = 'Correct!';
+                feedbackMessage.className = 'correct';
+            } else {
+                wrongQuestions.push(q);
+                feedbackMessage.textContent = `Incorrect. The correct answer was ${q.answer}.`;
+                feedbackMessage.className = 'incorrect';
+            }
+
+            // Reveal the model answer
+            const revealDiv = document.createElement('div');
+            revealDiv.style.marginTop = '0.75rem';
+            revealDiv.innerHTML = `
+                <div><strong>Correct answer:</strong></div>
+                <div class="model-answer" style="margin:0.25rem 0;padding:0.5rem;background:#f8f9fa;border-radius:6px;border:1px solid #eee">${renderTextWithMathToHTML(q.answer)}</div>
+            `;
+            optionsContainer.appendChild(revealDiv);
+            safeTypeset([revealDiv, optionsContainer]);
+
+            // Update progress bar
+            const progressPercent = ((currentQuestionIndex + 1) / activeQuizQuestions.length) * 100;
+            progressBarFill.style.width = `${progressPercent}%`;
+
+            // Advance after a short delay to show feedback
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < activeQuizQuestions.length) {
+                    displayQuestion();
+                } else {
+                    showResults();
+                }
+            }, 1400);
+        }
+
+        // --- Timer State and Controls ---
+        let totalTime = 0;
+        let remainingTime = 0;
+        let timerInterval = null;
+        const timerElement = document.getElementById('timer-display');
+
+        function startTimer() {
+            // Clear any existing timer
+            stopTimer();
+            totalTime = activeQuizQuestions.length * 30;
+            remainingTime = totalTime;
+            updateTimerDisplay();
+
+            timerInterval = setInterval(() => {
+                remainingTime--;
+                if (remainingTime <= 0) {
+                    remainingTime = 0;
+                    updateTimerDisplay();
+                    stopTimer();
+                    // Disable interactions and auto-submit
+                    disableAllInteractivity();
+                    // Small delay to show 00:00 then show results
+                    setTimeout(() => showResults(), 250);
+                    return;
+                }
+                updateTimerDisplay();
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function updateTimerDisplay() {
+            if (!timerElement) return;
+            const minutes = Math.floor(remainingTime / 60);
+            const seconds = remainingTime % 60;
+            timerElement.textContent = `Time Remaining: ${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        }
+
+        function disableAllInteractivity() {
+            // Disable option buttons and submit controls
+            document.querySelectorAll('button').forEach((b) => (b.disabled = true));
+            document.querySelectorAll('input, textarea').forEach((el) => (el.disabled = true));
+        }
+
+        function enableAllInteractivity() {
+            document.querySelectorAll('button').forEach((b) => (b.disabled = false));
+            document.querySelectorAll('input, textarea').forEach((el) => (el.disabled = false));
+        }
+
+        /**
+         * Handles the user's click on an option
+         */
+        function checkAnswer(event) {
+            // Use event delegation
+            const clickedButton = event.target.closest(".option-btn");
+            if (!clickedButton) return;
+
+            // Disable all buttons to prevent multiple clicks
+            document
+                .querySelectorAll(".option-btn")
+                .forEach((btn) => (btn.disabled = true));
+
+            const selectedOption = clickedButton.dataset.option;
+            const correctAnswer = activeQuizQuestions[currentQuestionIndex].answer;
+
+            const correctButton = optionsContainer.querySelector(
+                `[data-option="${correctAnswer}"]`
+            );
+
+            if (selectedOption === correctAnswer) {
+                // --- CORRECT ---
+                score++;
+                clickedButton.classList.add("correct-answer");
+                feedbackMessage.textContent = "Correct!";
+                feedbackMessage.className = "correct";
+            } else {
+                // --- WRONG ---
+                wrongQuestions.push(activeQuizQuestions[currentQuestionIndex]);
+                clickedButton.classList.add("wrong-answer");
+                if (correctButton) {
+                    correctButton.classList.add("correct-answer"); // Show the right one
+                }
+                feedbackMessage.textContent = `Incorrect. The correct answer was ${correctAnswer.toUpperCase()}.`;
+                feedbackMessage.className = "incorrect";
+            }
+            
+            // Update progress bar
+            const progressPercent =
+                ((currentQuestionIndex + 1) / activeQuizQuestions.length) * 100;
+            progressBarFill.style.width = `${progressPercent}%`;
+
+
+            // --- Move to next question or results ---
+            // Add try/catch for robustness
+            try {
+                setTimeout(() => {
+                    currentQuestionIndex++;
+                    if (currentQuestionIndex < activeQuizQuestions.length) {
+                        displayQuestion();
+                    } else {
+                        showResults();
+                    }
+                }, 1500); // Wait 1.5 seconds to show feedback
+            } catch (error) {
+                console.error("Error advancing question:", error);
+                // As a fallback, try to show results if advancing fails
+                showResults();
+            }
+        }
+
+        /**
+         * Displays the final score and next-step options
+         */
+        function showResults() {
+            scoreText.textContent = `Your Score: ${score} / ${activeQuizQuestions.length}`;
+            
+            if (wrongQuestions.length > 0) {
+                reviewWrongBtn.style.display = "block";
+                reviewWrongBtn.textContent = `Review ${wrongQuestions.length} Wrong Question(s)`;
+            } else {
+                reviewWrongBtn.style.display = "none";
+            }
+
+            showScreen("results");
+            // Stop timer when showing results and re-enable setup inputs
+            stopTimer();
+            // Re-enable setup controls so user can start a new quiz
+            quizPasteInput.disabled = false;
+        }
+
+        /**
+         * Restarts the quiz with the *original* set of questions, shuffled
+         */
+        function redoQuiz() {
+            // We use the "master" allQuestions list
+            const questionsToRedo = [...allQuestions];
+            shuffleArray(questionsToRedo);
+            startQuiz(questionsToRedo);
+        }
+
+        /**
+         * Starts a new quiz using only the questions the user got wrong, shuffled
+         */
+        function reviewWrong() {
+            if (wrongQuestions.length === 0) return;
+            // The new "master" list for this session is just the wrong questions
+            const questionsToReview = [...wrongQuestions];
+            shuffleArray(questionsToReview);
+            startQuiz(questionsToReview); 
+        }
+
+        /**
+         * Resets the entire app to the beginning
+         */
+        function startNewQuiz() {
+            allQuestions = [];
+            wrongQuestions = [];
+            activeQuizQuestions = [];
+            currentQuestionIndex = 0;
+            score = 0;
+            quizPasteInput.value = ""; // Clear the input
+            clearParseError(); // Clear any old errors
+            showScreen("setup");
+        }
+
+        // --- Initial Load ---
+        // On page load, make sure the setup screen is active
+        showScreen("setup");
+        // Typeset helper panel examples (if MathJax is loaded)
+        const helperPanel = document.getElementById('helper-panel');
+        if (helperPanel) {
+            // Defer slightly to allow async MathJax to load
+            setTimeout(() => safeTypeset(helperPanel), 300);
+        }
+    </script>
+</body>
+</html>
+
